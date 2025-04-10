@@ -1,10 +1,10 @@
-import { ragChat } from "@/lib/rag-chat";
-import { redis } from "@/lib/redis-chat";
 import ChatWrapper from "@/components/ChatWrapper";
 
 interface PageProps {
     params: {
         url: string | string[] | undefined;
+        prompt: string;
+        history: string[];
     };
 }
 
@@ -25,16 +25,42 @@ function reconstructUrl({ url }: { url: string[] }) {
     }
 }
 
+async function processStreamedResponse(response: Response): Promise<string> {
+    const reader = response.body?.getReader();
+    const decoder = new TextDecoder("utf-8");
+    let result = "";
+
+    if (!reader) {
+        throw new Error("Failed to read the response stream.");
+    }
+
+    while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const chunk = decoder.decode(value, { stream: true });
+        try {
+            const json = JSON.parse(chunk);
+            if (json.response) {
+                result += json.response; // Append the response content
+            }
+        } catch (error) {
+            console.warn("Failed to parse chunk as JSON:", chunk);
+        }
+    }
+
+    return result;
+}
+
 const page = async ({ params }: { params: PageProps["params"] }) => {
     const sessionId = "mock-session";
     try {
-        // Ensure params is resolved before accessing its properties
-        if (await !params || !params.url) {
+        if (!params || !params.url) {
             console.error("URL parameter is missing or undefined.");
             throw new Error("URL parameter is missing.");
         }
 
-        const urlArray = Array.isArray( await params.url) ? params.url : [params.url];
+        const urlArray = Array.isArray(params.url) ? params.url : [params.url];
 
         if (urlArray.length === 0 || urlArray.some((url) => !url)) {
             console.error("URL parameter is empty or contains invalid values:", urlArray);
@@ -44,7 +70,6 @@ const page = async ({ params }: { params: PageProps["params"] }) => {
         const reconstructedUrl = reconstructUrl({ url: urlArray });
         console.log("Reconstructed URL:", reconstructedUrl);
 
-        // Validate the reconstructed URL
         try {
             new URL(reconstructedUrl); // Validate URL format
         } catch {
@@ -52,26 +77,37 @@ const page = async ({ params }: { params: PageProps["params"] }) => {
             throw new Error("Invalid reconstructed URL.");
         }
 
-        // Check if the URL is already indexed
-        const isAlreadyIndexed = await redis.sismember("indexed-url", reconstructedUrl);
-        console.log("Is URL already indexed:", isAlreadyIndexed);
+        const response = await fetch("http://localhost:11434/api/generate", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+                sessionId,
+                prompt: `Based on the content of the following webpage: ${reconstructedUrl}, continue the conversation with the following input: ${params.prompt}`,
+                history: params.history, // Include conversation history
+                model: "Mistral", // Specify the correct model
+            }),
+        });
 
-        if (!isAlreadyIndexed) {
-            // Add the URL to the context and index it
-            await ragChat.context.add({
-                type: "html",
-                source: reconstructedUrl,
-                config: { chunkOverlap: 50, chunkSize: 500 },
-            });
-
-            await redis.sadd("indexed-url", reconstructedUrl);
-            console.log("URL indexed successfully:", reconstructedUrl);
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error("Failed to process URL with Mistral:", errorText);
+            throw new Error(`API Error: ${response.status} - ${errorText}`);
         }
 
-        return <ChatWrapper />;
+        const resultContent = await processStreamedResponse(response);
+        console.log("Final Combined Response:", resultContent);
+
+        if (!resultContent) {
+            console.error("Mistral returned an empty or invalid response.");
+            return <ChatWrapper response="The model did not return a valid response. Please try again later." />;
+        }
+
+        return <ChatWrapper response={resultContent} />;
     } catch (error) {
         console.error("Error in page function:", error);
-        throw new Error("An error occurred while processing the request.");
+        return <ChatWrapper response="An error occurred while processing your request. Please try again later." />;
     }
 };
 
