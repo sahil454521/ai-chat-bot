@@ -19,15 +19,55 @@ const TypingAnimation = ({ isVisible }: { isVisible: boolean }) => {
   );
 };
 
+// Define special prompt types
+enum PromptType {
+  TEXT = "text",
+  URL = "url",
+  COMMAND = "command",
+  IMAGE = "image"
+}
+
+// Helper to detect prompt type
+const detectPromptType = (input: string): { type: PromptType; content: string } => {
+  if (input.startsWith("/")) {
+    return { type: PromptType.COMMAND, content: input.slice(1) };
+  } else if (input.startsWith("http://") || input.startsWith("https://")) {
+    return { type: PromptType.URL, content: input };
+  } else if (input.startsWith("![") && (input.includes(".jpg") || input.includes(".png") || input.includes(".gif"))) {
+    return { type: PromptType.IMAGE, content: input.replace(/!\[(.*?)\]\((.*?)\)/, "$2") };
+  } else {
+    return { type: PromptType.TEXT, content: input };
+  }
+};
+
 const ChatWrapper = ({ sessionId = "anonymous", response = "" }: { sessionId?: string, response?: string }) => {
-    const [messages, setMessages] = useState<{ role: string; content: string }[]>([]);
+    const [messages, setMessages] = useState<{ role: string; content: string; type?: PromptType }[]>([]);
     const [input, setInput] = useState("");
     const [isLoading, setIsLoading] = useState(false);
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const inputRef = useRef<HTMLInputElement>(null);
     const [isTyping, setIsTyping] = useState(false);
-    const [terminalReady, setTerminalReady] = useState(false);
+    const [terminalReady, setTerminalReady] = useState(false); // Make sure this is false initially
     const [showWelcome, setShowWelcome] = useState(true);
+    const [promptHistory, setPromptHistory] = useState<string[]>([]);
+    const [historyIndex, setHistoryIndex] = useState(-1);
+    
+    // Debug logger
+    useEffect(() => {
+        console.log("Terminal ready:", terminalReady);
+        console.log("Show welcome:", showWelcome);
+    }, [terminalReady, showWelcome]);
+    
+    // For testing purposes, let's make the terminal ready immediately
+    // Comment this out after debugging
+    useEffect(() => {
+        const quickDebugTimer = setTimeout(() => {
+            setShowWelcome(false);
+            setTerminalReady(true);
+        }, 5000); // Changed from 1000ms to 5000ms (5 seconds)
+        
+        return () => clearTimeout(quickDebugTimer);
+    }, []);
     
     // Use WelcomeTerminal first, then transition to the chat interface
     useEffect(() => {
@@ -36,7 +76,7 @@ const ChatWrapper = ({ sessionId = "anonymous", response = "" }: { sessionId?: s
             setShowWelcome(false);
             // Start the boot sequence after welcome screen
             startBootSequence();
-        }, 5000); // Show welcome screen for 5 seconds
+        }, 10000); // Changed from 5000ms to 10000ms (10 seconds)
         
         return () => clearTimeout(welcomeTimer);
     }, []);
@@ -67,7 +107,7 @@ const ChatWrapper = ({ sessionId = "anonymous", response = "" }: { sessionId?: s
             } else {
                 setMessages(prev => [...prev, { 
                     role: "assistant", 
-                    content: "Welcome to AI Terminal. How can I assist you today?" 
+                    content: "Welcome to AI Terminal. How can I assist you today? You can use regular text, URLs, or commands starting with /." 
                 }]);
             }
         }, 2000);
@@ -91,45 +131,165 @@ const ChatWrapper = ({ sessionId = "anonymous", response = "" }: { sessionId?: s
         setInput(e.target.value);
     };
 
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!input.trim()) return;
+    // Handle keyboard shortcuts for command history
+    const handleKeyDown = (e: React.KeyboardEvent) => {
+        // Up arrow for previous command
+        if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            if (historyIndex < promptHistory.length - 1) {
+                const newIndex = historyIndex + 1;
+                setHistoryIndex(newIndex);
+                setInput(promptHistory[promptHistory.length - 1 - newIndex]);
+            }
+        }
+        // Down arrow for next command
+        else if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            if (historyIndex > 0) {
+                const newIndex = historyIndex - 1;
+                setHistoryIndex(newIndex);
+                setInput(promptHistory[promptHistory.length - 1 - newIndex]);
+            } else if (historyIndex === 0) {
+                setHistoryIndex(-1);
+                setInput('');
+            }
+        }
+        // Tab completion (basic implementation)
+        else if (e.key === 'Tab') {
+            e.preventDefault();
+            if (input.startsWith('/')) {
+                // Simple command suggestions
+                const commands = ['/help', '/clear', '/image', '/url', '/code', '/weather'];
+                const matching = commands.find(cmd => cmd.startsWith(input));
+                if (matching) {
+                    setInput(matching + ' ');
+                }
+            }
+        }
+    };
 
-        const userMessage = { role: "user", content: input };
-        setMessages((prev) => [...prev, userMessage]);
-        setInput("");
+    // Process special commands
+    const processCommand = (command: string): { content: string; endConversation: boolean } => {
+        const cmd = command.split(' ')[0].toLowerCase();
+        const args = command.slice(cmd.length).trim();
+        
+        switch (cmd) {
+            case 'help':
+                return { 
+                    content: `
+Available commands:
+/help - Show this help message
+/clear - Clear conversation history
+/image [url] - Analyze an image
+/url [url] - Analyze a webpage
+/code [language] - Get code snippet in specified language
+/weather [location] - Get current weather
+                    `, 
+                    endConversation: false 
+                };
+            case 'clear':
+                setMessages([{ role: "system", content: "Conversation cleared." }]);
+                return { content: "Conversation history cleared.", endConversation: true };
+            // Add more commands as needed
+            default:
+                return { 
+                    content: `Unknown command: /${cmd}. Type /help to see available commands.`, 
+                    endConversation: false 
+                };
+        }
+    };
+
+    // Handle prompt submission based on type
+    const handlePromptSubmission = async (userPrompt: string) => {
+        // Add to history
+        setPromptHistory(prev => [...prev, userPrompt]);
+        setHistoryIndex(-1);
+        
+        // Detect prompt type
+        const { type, content } = detectPromptType(userPrompt);
+        
+        // Add user message to chat
+        const userMessage = { role: "user", content: userPrompt, type };
+        setMessages(prev => [...prev, userMessage]);
+        
         setIsLoading(true);
-
+        
         try {
-            const response = await fetch("/api/chat", {
+            // Handle different prompt types
+            if (type === PromptType.COMMAND) {
+                // Process command locally
+                const commandResult = processCommand(content);
+                
+                if (commandResult.endConversation) {
+                    setIsLoading(false);
+                    return;
+                }
+                
+                // Display system message for command response
+                setTimeout(() => {
+                    setMessages(prev => [...prev, { role: "system", content: commandResult.content }]);
+                    setIsLoading(false);
+                }, 300);
+                return;
+            } 
+            
+            // For all non-command inputs, send to API
+            let apiEndpoint, requestBody;
+            
+            if (type === PromptType.URL) {
+                // This handles URLs like http://example.com
+                apiEndpoint = "/api/chat";
+                requestBody = {
+                    sessionId,
+                    prompt: `Analyze the content of this URL: ${content}`,
+                    history: messages.filter(msg => msg.role !== "system"),
+                };
+            } else if (type === PromptType.IMAGE) {
+                // This handles image links
+                apiEndpoint = "/api/chat";
+                requestBody = {
+                    sessionId,
+                    prompt: `Analyze this image: ${content}`,
+                    history: messages.filter(msg => msg.role !== "system"),
+                };
+            } else {
+                // Regular text input
+                apiEndpoint = "/api/chat";
+                requestBody = {
+                    sessionId,
+                    prompt: userPrompt,
+                    history: messages.filter(msg => msg.role !== "system"),
+                };
+            }
+            
+            // Send the query to your API
+            const response = await fetch(apiEndpoint, {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
                 },
-                body: JSON.stringify({
-                    sessionId,
-                    prompt: input,
-                    history: messages.filter(msg => msg.role !== "system"), // Pass the conversation history but filter out system messages
-                }),
+                body: JSON.stringify(requestBody),
             });
 
             if (!response.ok) {
-                throw new Error("Failed to fetch response from the model.");
+                throw new Error(`Failed to fetch response: ${response.status}`);
             }
 
+            // Process the model's response
             const data = await response.json();
             
             // Simulate typing effect for the AI response
             setIsTyping(true);
             setTimeout(() => {
-                const assistantMessage = { role: "assistant", content: data.response };
-                setMessages((prev) => [...prev, assistantMessage]);
+                const assistantMessage = { role: "assistant", content: data.response || "Sorry, I couldn't process that request.", type: PromptType.TEXT };
+                setMessages(prev => [...prev, assistantMessage]);
                 setIsTyping(false);
                 setIsLoading(false);
-            }, 500 + Math.min(data.response.length * 10, 2000)); // Typing time based on response length
+            }, 500 + Math.min((data.response?.length || 0) * 10, 2000)); // Typing time based on response length
+            
         } catch (error) {
             console.error("Error fetching response:", error);
-            setMessages((prev) => [
+            setMessages(prev => [
                 ...prev,
                 { role: "system", content: "Error: Connection interrupted." },
                 { role: "assistant", content: "I encountered an error. Please try again." },
@@ -138,8 +298,78 @@ const ChatWrapper = ({ sessionId = "anonymous", response = "" }: { sessionId?: s
         }
     };
 
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!input.trim()) return;
+        
+        const userPrompt = input;
+        setInput("");
+        
+        await handlePromptSubmission(userPrompt);
+    };
+
+    // Render message based on type
+    const renderMessage = (message: { role: string; content: string; type?: PromptType }, index: number) => {
+        if (message.role === "system") {
+            return (
+                <div className="flex items-center">
+                    <span className="text-gray-500 mr-2">$</span>
+                    <span>{message.content}</span>
+                </div>
+            );
+        }
+        
+        // For user and assistant messages
+        return (
+            <div 
+                className={`inline-block px-4 py-2 rounded-lg ${
+                    message.role === "user"
+                        ? "bg-indigo-600/70 text-white border border-indigo-500/50"
+                        : "bg-gray-800/70 text-gray-100 border border-gray-700/50"
+                }`}
+            >
+                {message.role === "assistant" && (
+                    <div className="mb-1 text-xs text-indigo-400 flex items-center">
+                        <span className="mr-1 h-2 w-2 rounded-full bg-indigo-500 inline-block animate-pulse"></span> AI
+                    </div>
+                )}
+                
+                {message.type === PromptType.URL && message.role === "user" ? (
+                    <div className={`${message.role === "assistant" ? "text-sm leading-relaxed" : "text-sm"}`}>
+                        Analyzing URL: <a href={message.content} target="_blank" rel="noopener noreferrer" className="text-blue-400 underline">{message.content}</a>
+                    </div>
+                ) : message.type === PromptType.IMAGE && message.role === "user" ? (
+                    <div className={`${message.role === "assistant" ? "text-sm leading-relaxed" : "text-sm"}`}>
+                        Analyzing image: <br />
+                        <img src={message.content} alt="User provided" className="max-w-[200px] mt-2 rounded" />
+                    </div>
+                ) : (
+                    <div className={`${message.role === "assistant" ? "text-sm leading-relaxed" : "text-sm"}`}>
+                        {message.content}
+                    </div>
+                )}
+            </div>
+        );
+    };
+
+    // Render the component
     if (showWelcome) {
-        return <WelcomeTerminal />;
+        // Show welcome screen for longer duration
+        return (
+            <motion.div 
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ duration: 1.0 }}
+                className="min-h-screen bg-black"
+            >
+                <WelcomeTerminal />
+                
+                {/* Debug info overlay */}
+                <div className="fixed bottom-4 right-4 text-xs text-gray-500 bg-black/50 p-2 rounded">
+                    Welcome screen active. Loading terminal in {10}s...
+                </div>
+            </motion.div>
+        );
     }
 
     return (
@@ -187,26 +417,7 @@ const ChatWrapper = ({ sessionId = "anonymous", response = "" }: { sessionId?: s
                                             : "text-left"
                                 }`}
                             >
-                                {message.role !== "system" && (
-                                    <div 
-                                        className={`inline-block px-4 py-2 rounded-lg ${
-                                            message.role === "user"
-                                                ? "bg-indigo-600/70 text-white border border-indigo-500/50"
-                                                : "bg-gray-800/70 text-gray-100 border border-gray-700/50"
-                                        }`}
-                                    >
-                                        {message.role === "assistant" && (
-                                            <div className="mb-1 text-xs text-indigo-400 flex items-center">
-                                                <span className="mr-1 h-2 w-2 rounded-full bg-indigo-500 inline-block animate-pulse"></span> AI
-                                            </div>
-                                        )}
-                                        <div className={`${message.role === "assistant" ? "text-sm leading-relaxed" : "text-sm"}`}>
-                                            {message.content}
-                                        </div>
-                                    </div>
-                                )}
-                                
-                                {message.role === "system" && (
+                                {message.role !== "system" ? renderMessage(message, index) : (
                                     <div className="flex items-center">
                                         <span className="text-gray-500 mr-2">$</span>
                                         <span>{message.content}</span>
@@ -236,43 +447,58 @@ const ChatWrapper = ({ sessionId = "anonymous", response = "" }: { sessionId?: s
                 </motion.div>
             </div>
 
-            {/* Terminal Input */}
-            <motion.div
-                initial={{ y: 20, opacity: 0 }}
-                animate={{ y: 0 }}
-                transition={{ delay: 0.2, duration: 0.3 }}
+            {/* Command Suggestion Chips - Show when relevant */}
+            {terminalReady && input.startsWith('/') && (
+                <div className="flex flex-wrap gap-2 px-4 py-2 bg-black/90 border-t border-gray-800/30">
+                    {['/help', '/clear', '/image', '/url', '/code', '/weather']
+                        .filter(cmd => cmd.startsWith(input))
+                        .map((cmd, i) => (
+                            <button
+                                key={i}
+                                onClick={() => setInput(cmd + ' ')}
+                                className="px-2 py-1 text-xs bg-gray-800 text-gray-300 rounded border border-gray-700/50 hover:bg-gray-700 transition-colors"
+                            >
+                                {cmd}
+                            </button>
+                        ))
+                    }
+                </div>
+            )}
+
+            {/* Terminal Input - ALWAYS VISIBLE FOR DEBUGGING */}
+            <div
                 className="border-t border-gray-800/50 bg-black/90 backdrop-blur-md p-4 shadow-lg shadow-indigo-900/5"
             >
+                {/* Debug info */}
+                <div className="mb-2 text-yellow-500 text-xs">
+                    Debug: Terminal Ready: {terminalReady ? "Yes" : "No"}, 
+                    Show Welcome: {showWelcome ? "Yes" : "No"}
+                </div>
+                
                 <form onSubmit={handleSubmit} className="flex items-center space-x-3 bg-gray-950 rounded-lg border border-gray-800/50 px-4 py-2">
                     <div className="font-mono text-indigo-400 text-sm">~/</div>
                     <input
                         ref={inputRef}
                         value={input}
                         onChange={handleInputChange}
-                        placeholder="Type your query..."
+                        onKeyDown={handleKeyDown}
+                        placeholder="Type your query, URL, or /command..."
                         className="flex-1 bg-transparent border-none px-2 py-1.5 text-gray-100 placeholder-gray-500 focus:outline-none text-sm"
-                        disabled={isLoading || !terminalReady}
+                        // ALLOW INPUT DURING DEBUGGING:
+                        // disabled={isLoading || !terminalReady}
                         autoComplete="off"
                     />
                     <button 
                         type="submit" 
-                        disabled={isLoading || !input.trim() || !terminalReady}
+                        // ALLOW SUBMISSION DURING DEBUGGING:
+                        // disabled={isLoading || !input.trim() || !terminalReady}
+                        disabled={isLoading || !input.trim()}
                         className="rounded-md px-4 py-1.5 bg-indigo-600/80 hover:bg-indigo-700 text-white transition-all disabled:opacity-50 text-sm border border-indigo-500/50 flex items-center"
                     >
-                        {isLoading ? (
-                            <span className="flex items-center">
-                                <span className="h-2 w-2 bg-white rounded-full mr-2 animate-pulse"></span>
-                                Executing
-                            </span>
-                        ) : (
-                            <>Execute</>
-                        )}
+                        {isLoading ? "Executing..." : "Execute"}
                     </button>
                 </form>
-                <div className="mt-2 text-center text-xs text-gray-600">
-                    {terminalReady ? "Terminal ready. Type your query and press Enter or click Execute." : "Terminal initializing..."}
-                </div>
-            </motion.div>
+            </div>
         </motion.div>
     );
 };
