@@ -12,9 +12,9 @@ export default function Home() {
 
   const handleEnterTerminal = () => {
     setIsLoading(true);
-    // Navigate to the chat terminal page
+    // Navigate to the [...url] route which contains your ChatWrapper
     setTimeout(() => {
-      router.push("/terminal");
+      router.push("/api/chat"); // Change this to the correct path
     }, 500);
   };
 
@@ -171,8 +171,8 @@ export default function Home() {
           </div>
           <div className="p-4 h-32 overflow-hidden font-mono text-sm">
             <div className="text-green-500">$ ./start-terminal.sh</div>
-            <div className="text-gray-400 mt-1">> Welcome to AI Terminal v1.0</div>
-            <div className="text-gray-400 mt-1">> All systems operational</div>
+            <div className="text-gray-400 mt-1">{'>'} Welcome to AI Terminal v1.0</div>
+            <div className="text-gray-400 mt-1">{'>'} All systems operational</div>
             <div className="text-indigo-400 mt-1">
               <span className="mr-2">AI:</span>
               <span className="text-gray-300">How can I assist you today?</span>
