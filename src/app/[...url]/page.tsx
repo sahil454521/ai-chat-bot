@@ -2,9 +2,9 @@ import { notFound } from "next/navigation";
 import ChatWrapper from "@/components/ChatWrapper";
 
 type Props = {
-  params: {
+  params: Promise<{
     url: string[]; // Always an array for catch-all routes
-  };
+  }>;
   searchParams?: {
     prompt?: string;
     history?: string | string[];
@@ -57,16 +57,19 @@ function validateAndNormalizeUrl(urlString: string): string {
   return url.toString();
 }
 
-export default function URLPage({ params, searchParams }: Props) {
+export default async function URLPage({ params, searchParams }: Props) {
   try {
+    // Resolve the params promise
+    const resolvedParams = await params;
+
     // Validate URL segments
-    if (!params.url || params.url.length === 0) {
+    if (!resolvedParams.url || resolvedParams.url.length === 0) {
       console.warn("No URL segments provided");
       return notFound();
     }
 
     // Reconstruct and validate URL
-    const urlPath = reconstructUrl(params.url);
+    const urlPath = reconstructUrl(resolvedParams.url);
     const validUrl = validateAndNormalizeUrl(urlPath);
 
     // Process search params
