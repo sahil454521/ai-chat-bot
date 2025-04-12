@@ -260,24 +260,21 @@ Available commands:
             let apiEndpoint, requestBody;
             
             if (type === PromptType.URL) {
-                // This handles URLs like http://example.com
-                apiEndpoint = "/api/chat";
+                apiEndpoint = "http://localhost:11434/api/generate"; // Update this URL
                 requestBody = {
                     sessionId,
                     prompt: `Analyze the content of this URL: ${content}`,
                     history: messages.filter(msg => msg.role !== "system"),
                 };
             } else if (type === PromptType.IMAGE) {
-                // This handles image links
-                apiEndpoint = "/api/chat";
+                apiEndpoint = "http://localhost:11434/api/generate"; // Update this URL
                 requestBody = {
                     sessionId,
                     prompt: `Analyze this image: ${content}`,
                     history: messages.filter(msg => msg.role !== "system"),
                 };
             } else {
-                // Regular text input
-                apiEndpoint = "/api/chat";
+                apiEndpoint = "http://localhost:11434/api/generate"; // Update this URL
                 requestBody = {
                     sessionId,
                     prompt: userPrompt,
@@ -286,7 +283,7 @@ Available commands:
             }
             
             // Send the query to your API
-            const response = await fetch("/api/chat", {
+            const response = await fetch(apiEndpoint, {
               method: "POST", // Make sure this is "POST"
               headers: {
                 "Content-Type": "application/json",
