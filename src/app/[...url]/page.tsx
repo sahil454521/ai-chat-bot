@@ -1,11 +1,13 @@
 import { notFound } from "next/navigation";
 import ChatWrapper from "@/components/ChatWrapper";
 
-interface PageProps {
+// Update the type definition to match Next.js 15's expectations
+type Props = {
   params: {
     url: string[];
   };
-}
+  searchParams: { [key: string]: string | string[] | undefined };
+};
 
 function reconstructUrl(url: string[]): string {
   try {
@@ -16,7 +18,10 @@ function reconstructUrl(url: string[]): string {
   }
 }
 
-export default async function URLPage({ params }: PageProps) {
+// Make sure the function signature matches Next.js expectations
+export default function URLPage({ params, searchParams }: Props) {
+  // Remove the async keyword if there's no await inside the function
+  
   if (!params.url || params.url.length === 0) {
     return notFound();
   }
