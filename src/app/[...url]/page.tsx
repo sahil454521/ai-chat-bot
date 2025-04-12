@@ -1,40 +1,90 @@
 import { notFound } from "next/navigation";
 import ChatWrapper from "@/components/ChatWrapper";
 
-// Update the type definition to match Next.js 15's expectations
 type Props = {
   params: {
-    url: string[]; // Dynamic route segments
+    url: string[]; // Always an array for catch-all routes
   };
-  searchParams?: { [key: string]: string | string[] | undefined }; // Optional query parameters
+  searchParams?: {
+    prompt?: string;
+    history?: string | string[];
+    [key: string]: string | string[] | undefined;
+  };
 };
 
-function reconstructUrl(url: string[]): string {
-  try {
-    return url.map(segment => decodeURIComponent(segment)).join("/");
-  } catch (error) {
-    console.error("Error reconstructing URL:", error);
-    return "";
+/**
+ * Safely reconstructs a URL from path segments
+ * @param urlSegments Array of URL path segments
+ * @returns Properly formatted URL string
+ * @throws Error if segments can't be decoded
+ */
+function reconstructUrl(urlSegments: string[]): string {
+  if (!urlSegments || urlSegments.length === 0) {
+    throw new Error("URL segments array is empty");
   }
+
+  const decodedSegments = urlSegments.map(segment => {
+    try {
+      return decodeURIComponent(segment);
+    } catch (error) {
+      console.error("Error decoding URL segment:", segment);
+      throw new Error(`Invalid URL segment: ${segment}`);
+    }
+  });
+
+  return decodedSegments.join("/");
 }
 
-// This is correct
+/**
+ * Validates and normalizes a URL string
+ * @param urlString The URL to validate
+ * @returns Properly formatted URL
+ * @throws Error if URL is invalid
+ */
+function validateAndNormalizeUrl(urlString: string): string {
+  // Add default protocol if missing
+  if (!urlString.match(/^https?:\/\//)) {
+    urlString = `https://${urlString}`;
+  }
+
+  const url = new URL(urlString);
+  
+  // Enforce HTTPS for security
+  if (url.protocol !== "https:") {
+    url.protocol = "https:";
+  }
+
+  return url.toString();
+}
+
 export default function URLPage({ params, searchParams }: Props) {
-  if (!params.url || params.url.length === 0) {
-    return notFound();
-  }
-
-  const reconstructedUrl = reconstructUrl(params.url);
-
-  // Validate the URL format
-  let validUrl: string;
   try {
-    const urlObj = new URL(reconstructedUrl.startsWith("http") ? reconstructedUrl : `https://${reconstructedUrl}`);
-    validUrl = urlObj.toString();
+    // Validate URL segments
+    if (!params.url || params.url.length === 0) {
+      console.warn("No URL segments provided");
+      return notFound();
+    }
+
+    // Reconstruct and validate URL
+    const urlPath = reconstructUrl(params.url);
+    const validUrl = validateAndNormalizeUrl(urlPath);
+
+    // Process search params
+    const prompt = searchParams?.prompt;
+    const history = typeof searchParams?.history === "string" 
+      ? [searchParams.history] 
+      : searchParams?.history;
+
+    return (
+      <ChatWrapper 
+        initialUrl={validUrl}
+        initialPrompt={prompt}
+        initialHistory={history}
+      />
+    );
+
   } catch (error) {
-    console.error("Invalid URL format:", error);
+    console.error("Error processing URL:", error);
     return notFound();
   }
-
-  return <ChatWrapper initialUrl={validUrl} />;
 }
