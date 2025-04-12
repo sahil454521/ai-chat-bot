@@ -4,7 +4,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const { sessionId, model, input } = req.body;
 
     try {
-        const response = await fetch("http://localhost:11434/api/generate", { // Update this URL
+        const response = await fetch("http://104.43.116.18:11434/api/generate", { // Update this URL
             method: "POST",
             headers: {
                 "Content-Type": "application/json",

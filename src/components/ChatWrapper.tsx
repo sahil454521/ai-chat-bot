@@ -260,21 +260,21 @@ Available commands:
             let apiEndpoint, requestBody;
             
             if (type === PromptType.URL) {
-                apiEndpoint = "http://localhost:11434/api/generate"; // Update this URL
+                apiEndpoint = "http://104.43.116.18:11434/api/generate"; // Update this URL
                 requestBody = {
                     sessionId,
                     prompt: `Analyze the content of this URL: ${content}`,
                     history: messages.filter(msg => msg.role !== "system"),
                 };
             } else if (type === PromptType.IMAGE) {
-                apiEndpoint = "http://localhost:11434/api/generate"; // Update this URL
+                apiEndpoint = "http://104.43.116.18:11434/api/generate"; // Update this URL
                 requestBody = {
                     sessionId,
                     prompt: `Analyze this image: ${content}`,
                     history: messages.filter(msg => msg.role !== "system"),
                 };
             } else {
-                apiEndpoint = "http://localhost:11434/api/generate"; // Update this URL
+                apiEndpoint = "http://104.43.116.18:11434/api/generate"; // Update this URL
                 requestBody = {
                     sessionId,
                     prompt: userPrompt,
