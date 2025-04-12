@@ -5,11 +5,11 @@ type Props = {
   params: Promise<{
     url: string[]; // Always an array for catch-all routes
   }>;
-  searchParams?: {
+  searchParams?: Promise<{
     prompt?: string;
     history?: string | string[];
     [key: string]: string | string[] | undefined;
-  };
+  }>;
 };
 
 /**
@@ -59,8 +59,9 @@ function validateAndNormalizeUrl(urlString: string): string {
 
 export default async function URLPage({ params, searchParams }: Props) {
   try {
-    // Resolve the params promise
+    // Resolve the params and searchParams promises
     const resolvedParams = await params;
+    const resolvedSearchParams = searchParams ? await searchParams : undefined;
 
     // Validate URL segments
     if (!resolvedParams.url || resolvedParams.url.length === 0) {
@@ -73,13 +74,14 @@ export default async function URLPage({ params, searchParams }: Props) {
     const validUrl = validateAndNormalizeUrl(urlPath);
 
     // Process search params
-    const prompt = searchParams?.prompt;
-    const history = typeof searchParams?.history === "string" 
-      ? [searchParams.history] 
-      : searchParams?.history;
+    const prompt = resolvedSearchParams?.prompt;
+    const history = typeof resolvedSearchParams?.history === "string" 
+      ? [resolvedSearchParams.history] 
+      : resolvedSearchParams?.history;
 
     return (
       <ChatWrapper 
+        sessionId={crypto.randomUUID()} // Generate a unique session ID
         initialUrl={validUrl}
         initialPrompt={prompt}
         initialHistory={history}

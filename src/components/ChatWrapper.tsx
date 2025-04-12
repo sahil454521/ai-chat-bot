@@ -40,7 +40,14 @@ const detectPromptType = (input: string): { type: PromptType; content: string } 
   }
 };
 
-const ChatWrapper = ({ sessionId = "anonymous", response = "" }: { sessionId?: string, response?: string }) => {
+type ChatWrapperProps = {
+  sessionId: string;
+  initialUrl: string;
+  initialPrompt?: string;
+  initialHistory?: string[];
+};
+
+const ChatWrapper = ({ sessionId, initialUrl, initialPrompt, initialHistory }: ChatWrapperProps) => {
     const [messages, setMessages] = useState<{ role: string; content: string; type?: PromptType }[]>([]);
     const [input, setInput] = useState("");
     const [isLoading, setIsLoading] = useState(false);
@@ -102,8 +109,8 @@ const ChatWrapper = ({ sessionId = "anonymous", response = "" }: { sessionId?: s
         }, 1600);
         
         const timer5 = setTimeout(() => {
-            if (response) {
-                setMessages(prev => [...prev, { role: "assistant", content: response }]);
+            if (initialPrompt) {
+                setMessages(prev => [...prev, { role: "assistant", content: initialPrompt }]);
             } else {
                 setMessages(prev => [...prev, { 
                     role: "assistant", 
@@ -114,6 +121,22 @@ const ChatWrapper = ({ sessionId = "anonymous", response = "" }: { sessionId?: s
         
         return { timer1, timer2, timer3, timer4, timer5 };
     };
+
+    // Add effect to handle initialUrl
+    useEffect(() => {
+        if (initialUrl) {
+            // When a URL is provided, automatically create a URL analysis prompt
+            const prompt = `Analyze this webpage: ${initialUrl}`;
+            setMessages(prev => [
+                ...prev,
+                { role: "system", content: `Analyzing content from: ${initialUrl}` },
+                { role: "user", content: prompt, type: PromptType.URL }
+            ]);
+            
+            // Auto-submit this prompt
+            handlePromptSubmission(prompt);
+        }
+    }, [initialUrl]);
 
     // Auto-scroll to bottom when messages change
     useEffect(() => {
@@ -263,12 +286,12 @@ Available commands:
             }
             
             // Send the query to your API
-            const response = await fetch(apiEndpoint, {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                },
-                body: JSON.stringify(requestBody),
+            const response = await fetch("/api/chat", {
+              method: "POST", // Make sure this is "POST"
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify(requestBody),
             });
 
             if (!response.ok) {
@@ -335,16 +358,16 @@ Available commands:
                 )}
                 
                 {message.type === PromptType.URL && message.role === "user" ? (
-                    <div className={`${message.role === "assistant" ? "text-sm leading-relaxed" : "text-sm"}`}>
+                    <div className="text-sm">
                         Analyzing URL: <a href={message.content} target="_blank" rel="noopener noreferrer" className="text-blue-400 underline">{message.content}</a>
                     </div>
                 ) : message.type === PromptType.IMAGE && message.role === "user" ? (
-                    <div className={`${message.role === "assistant" ? "text-sm leading-relaxed" : "text-sm"}`}>
+                    <div className="text-sm">
                         Analyzing image: <br />
                         <img src={message.content} alt="User provided" className="max-w-[200px] mt-2 rounded" />
                     </div>
                 ) : (
-                    <div className={`${message.role === "assistant" ? "text-sm leading-relaxed" : "text-sm"}`}>
+                    <div className="text-sm leading-relaxed">
                         {message.content}
                     </div>
                 )}

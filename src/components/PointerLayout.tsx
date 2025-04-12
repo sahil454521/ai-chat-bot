@@ -4,12 +4,14 @@ import { Pointer } from "@/components/magicui/pointer"
 import { motion } from "motion/react"
 import { ReactNode, useState, useEffect } from "react"
 import { usePathname } from "next/navigation"
+import React from "react";
 
 interface PointerLayoutProps {
   children: ReactNode
 }
 
 export default function PointerLayout({ children }: PointerLayoutProps) {
+  // Get the current pathname to determine if we are on the terminal page
   const pathname = usePathname()
   const [pointerState, setPointerState] = useState<"default" | "input" | "button">("default")
   
