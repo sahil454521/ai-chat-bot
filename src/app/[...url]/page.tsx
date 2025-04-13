@@ -7,6 +7,7 @@ type Props = {
   }>;
   searchParams?: Promise<{
     prompt?: string;
+    text?: string;
     history?: string | string[];
     [key: string]: string | string[] | undefined;
   }>;
@@ -69,12 +70,27 @@ export default async function URLPage({ params, searchParams }: Props) {
       return notFound();
     }
 
-    // Reconstruct and validate URL
-    const urlPath = reconstructUrl(resolvedParams.url);
+    // Special handling for extension requests
+    let urlPath = reconstructUrl(resolvedParams.url);
+
+    // Check if this is a full URL from our extension
+    if (urlPath.includes('%2F') || urlPath.includes('%3A')) {
+      try {
+        urlPath = decodeURIComponent(urlPath);
+      } catch (error) {
+        console.error("Error decoding extension URL:", error);
+      }
+    }
+
     const validUrl = validateAndNormalizeUrl(urlPath);
 
     // Process search params
-    const prompt = resolvedSearchParams?.prompt;
+    const prompt = resolvedSearchParams?.text 
+      ? `Summarize this content from ${validUrl}: ${resolvedSearchParams.text}`
+      : resolvedSearchParams?.prompt 
+        ? resolvedSearchParams.prompt 
+        : `Summarize the content from this webpage: ${validUrl}`;
+
     const history = typeof resolvedSearchParams?.history === "string" 
       ? [resolvedSearchParams.history] 
       : resolvedSearchParams?.history;

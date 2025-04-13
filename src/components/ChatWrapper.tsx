@@ -180,18 +180,43 @@ const ChatWrapper = ({ sessionId, initialUrl, initialPrompt, initialHistory }: C
   };
 
   // Handle initial URL analysis
-  // useEffect(() => {
-  //   if (initialUrl) {
-  //     const prompt = `Analyze this webpage: ${initialUrl}`;
-  //     setMessages(prev => [
-  //       ...prev,
-  //       { role: "system", content: `Analyzing content from: ${initialUrl}` },
-  //       { role: "user", content: prompt, type: PromptType.URL }
-  //     ]);
-      
-  //     handlePromptSubmission(prompt);
-  //   }
-  // }, [initialUrl]);
+  useEffect(() => {
+    // If we have an initialUrl prop, set up an automatic summarization request
+    if (initialUrl) {
+      // Wait for component to fully initialize
+      setTimeout(() => {
+        // Add a system message explaining we're summarizing a URL
+        setMessages(prev => [...prev, { 
+          role: "system", 
+          content: `Processing URL: ${initialUrl}`,
+          type: PromptType.TEXT
+        }]);
+        
+        // Trigger an automatic summarization prompt if no initialPrompt is specified
+        if (!initialPrompt) {
+          const summaryPrompt = `Please summarize the content from this URL: ${initialUrl}`;
+          // Add the user message
+          setMessages(prev => [...prev, { 
+            role: "user", 
+            content: summaryPrompt,
+            type: PromptType.TEXT 
+          }]);
+          
+          // Process the summarization request
+          handlePromptSubmission(summaryPrompt);
+        } else {
+          // If initialPrompt exists, use it instead
+          setMessages(prev => [...prev, { 
+            role: "user", 
+            content: initialPrompt,
+            type: PromptType.TEXT 
+          }]);
+          
+          handlePromptSubmission(initialPrompt);
+        }
+      }, 500);
+    }
+  }, [initialUrl]);
 
   // Auto-scroll to bottom when messages change
   useEffect(() => {
@@ -284,7 +309,10 @@ Available commands:
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ userPrompt }),
+        body: JSON.stringify({ 
+          userPrompt,
+          url: initialUrl // Include the initialUrl if available
+        }),
       });
 
       if (!response.ok) {
