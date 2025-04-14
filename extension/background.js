@@ -1,5 +1,5 @@
 // Constants
-const APP_DOMAIN = 'ai-chat-bot-gcar-791311m5k-sahilpathak2005-gmailcoms-projects.vercel.app'; // Replace with your actual domain
+const APP_DOMAIN = 'ai-chat-bot-gcar.vercel.app'; // Replace with your actual domain
 
 // Initialize when extension is installed
 chrome.runtime.onInstalled.addListener(() => {
