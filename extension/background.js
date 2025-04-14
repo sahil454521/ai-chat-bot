@@ -9,9 +9,20 @@ chrome.runtime.onInstalled.addListener(() => {
 // Handle toolbar icon click
 chrome.action.onClicked.addListener((tab) => {
   const currentUrl = encodeURIComponent(tab.url);
-  chrome.tabs.create({ 
-    url: `https://${APP_DOMAIN}/${currentUrl}?noAutoAnalyze=true`
-  });
+  const fullUrl = `https://${APP_DOMAIN}/${currentUrl}`;
+  
+  try {
+    // Method 1
+    chrome.tabs.create({ url: fullUrl });
+    
+    // Fallback method (after a short delay)
+    setTimeout(() => {
+      // Method 2
+      window.open(fullUrl, '_blank');
+    }, 500);
+  } catch (e) {
+    console.error("Error opening URL:", e);
+  }
 });
 
 // Handle messages from content script
@@ -19,7 +30,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.action === "openChatWithUrl") {
     const encodedUrl = encodeURIComponent(message.url);
     chrome.tabs.create({ 
-      url: `https://${APP_DOMAIN}/${encodedUrl}?noAutoAnalyze=true` 
+      url: `https://${APP_DOMAIN}/${encodedUrl}` 
     });
     sendResponse({status: "success"});
   }
