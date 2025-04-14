@@ -10,7 +10,7 @@ chrome.runtime.onInstalled.addListener(() => {
 chrome.action.onClicked.addListener((tab) => {
   const currentUrl = encodeURIComponent(tab.url);
   chrome.tabs.create({ 
-    url: `https://${APP_DOMAIN}/${currentUrl}?noAutoAnalyze=true`
+    url: `https://${APP_DOMAIN}/${currentUrl}?fast=true`
   });
 });
 
@@ -19,16 +19,16 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.action === "openChatWithUrl") {
     const encodedUrl = encodeURIComponent(message.url);
     chrome.tabs.create({ 
-      url: `https://${APP_DOMAIN}/${encodedUrl}` 
+      url: `https://${APP_DOMAIN}/${encodedUrl}?fast=true` 
     });
     sendResponse({status: "success"});
   }
   
   if (message.action === "selectedText") {
     const encodedUrl = encodeURIComponent(message.url);
-    const encodedText = encodeURIComponent(message.text).substring(0, 1000);
+    const encodedText = encodeURIComponent(message.text).substring(0, 500); // Reduce to 500 chars
     chrome.tabs.create({
-      url: `https://${APP_DOMAIN}/${encodedUrl}?text=${encodedText}`
+      url: `https://${APP_DOMAIN}/${encodedUrl}?text=${encodedText}&fast=true`
     });
     sendResponse({status: "success"});
   }
@@ -48,9 +48,9 @@ chrome.runtime.onInstalled.addListener(() => {
 chrome.contextMenus.onClicked.addListener((info, tab) => {
   if (info.menuItemId === "analyzeSelection") {
     const encodedUrl = encodeURIComponent(tab.url);
-    const encodedText = encodeURIComponent(info.selectionText || "").substring(0, 1000);
+    const encodedText = encodeURIComponent(info.selectionText || "").substring(0, 500); // Reduce to 500 chars
     chrome.tabs.create({
-      url: `https://${APP_DOMAIN}/${encodedUrl}?text=${encodedText}`
+      url: `https://${APP_DOMAIN}/${encodedUrl}?text=${encodedText}&fast=true`
     });
   }
 });

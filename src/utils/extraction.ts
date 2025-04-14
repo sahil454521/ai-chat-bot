@@ -72,7 +72,9 @@ export async function extractTextFromUrl(url: string): Promise<string> {
   } catch (error) {
     console.error(`Error extracting content from ${url}:`, error);
     // Fix: properly handle the unknown type
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+    const errorMessage = error instanceof Error 
+    ? error.message 
+    : String(error); // Convert any non-Error object to string
     return `Failed to extract content from ${url}: ${errorMessage}`;
   }
 }
