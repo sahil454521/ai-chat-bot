@@ -1,5 +1,6 @@
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import ChatWrapper from "@/components/ChatWrapper";
+import { isAppRoute } from "@/utils/routes";
 
 type Props = {
   params: Promise<{
@@ -9,6 +10,7 @@ type Props = {
     prompt?: string;
     text?: string;
     history?: string | string[];
+    noAutoAnalyze?: string;
     [key: string]: string | string[] | undefined;
   }>;
 };
@@ -70,6 +72,23 @@ export default async function URLPage({ params, searchParams }: Props) {
       return notFound();
     }
 
+    // Check if this is an app route (e.g., /chat, /about)
+    const path = resolvedParams.url[0];
+    if (isAppRoute(path)) {
+      // This is an app route, redirect to the appropriate page without analysis
+      // For chat specifically, we'll just render the chat component without URL analysis
+      if (path === 'chat') {
+        return (
+          <ChatWrapper 
+            sessionId={crypto.randomUUID()}
+            skipAutoPrompt={true}
+          />
+        );
+      }
+      // For other app routes, redirect to them
+      return redirect(`/${path}`);
+    }
+
     // Special handling for extension requests
     let urlPath = reconstructUrl(resolvedParams.url);
 
@@ -83,13 +102,21 @@ export default async function URLPage({ params, searchParams }: Props) {
     }
 
     const validUrl = validateAndNormalizeUrl(urlPath);
-
-    // Process search params
-    const prompt = resolvedSearchParams?.text 
-      ? `Summarize this content from ${validUrl}: ${resolvedSearchParams.text}`
-      : resolvedSearchParams?.prompt 
-        ? resolvedSearchParams.prompt 
-        : `Summarize the content from this webpage: ${validUrl}`;
+    
+    // Check if we should skip auto-analysis
+    const skipAutoAnalysis = resolvedSearchParams?.noAutoAnalyze === "true";
+    
+    // Process search params - but don't create an auto-analysis prompt if noAutoAnalyze is true
+    let prompt;
+    if (skipAutoAnalysis) {
+      prompt = resolvedSearchParams?.prompt || null;
+    } else {
+      prompt = resolvedSearchParams?.text 
+        ? `Summarize this content from ${validUrl}: ${resolvedSearchParams.text}`
+        : resolvedSearchParams?.prompt 
+          ? resolvedSearchParams.prompt 
+          : `Summarize the content from this webpage: ${validUrl}`;
+    }
 
     const history = typeof resolvedSearchParams?.history === "string" 
       ? [resolvedSearchParams.history] 
@@ -101,6 +128,7 @@ export default async function URLPage({ params, searchParams }: Props) {
         initialUrl={validUrl}
         initialPrompt={prompt}
         initialHistory={history}
+        skipAutoPrompt={skipAutoAnalysis}
       />
     );
 

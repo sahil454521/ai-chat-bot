@@ -10,7 +10,7 @@ chrome.runtime.onInstalled.addListener(() => {
 chrome.action.onClicked.addListener((tab) => {
   const currentUrl = encodeURIComponent(tab.url);
   chrome.tabs.create({ 
-    url: `https://${APP_DOMAIN}/${currentUrl}`
+    url: `https://${APP_DOMAIN}/${currentUrl}?noAutoAnalyze=true`
   });
 });
 
@@ -19,7 +19,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.action === "openChatWithUrl") {
     const encodedUrl = encodeURIComponent(message.url);
     chrome.tabs.create({ 
-      url: `https://${APP_DOMAIN}/${encodedUrl}` 
+      url: `https://${APP_DOMAIN}/${encodedUrl}?noAutoAnalyze=true` 
     });
     sendResponse({status: "success"});
   }

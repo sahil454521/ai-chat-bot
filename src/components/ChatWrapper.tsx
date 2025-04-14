@@ -4,14 +4,13 @@ import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import WelcomeTerminal from "./WelcomeTerminal";
 import { OpenAI } from "openai";
-import chat   from "@/pages/api/chat";
-
+import chat from "@/pages/api/chat";
 
 const TypingAnimation = ({ isVisible }: { isVisible: boolean }) => {
   return (
     <AnimatePresence>
       {isVisible && (
-        <motion.span 
+        <motion.span
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
@@ -26,7 +25,7 @@ enum PromptType {
   TEXT = "text",
   URL = "url",
   COMMAND = "command",
-  IMAGE = "image"
+  IMAGE = "image",
 }
 
 const detectPromptType = (input: string): { type: PromptType; content: string } => {
@@ -61,7 +60,7 @@ const fetchWithRetry = async (
           : Math.min(baseDelay * Math.pow(2, attempt), 30000); // Max 30s delay
 
         console.warn(`Rate limited. Attempt ${attempt + 1}/${retries}. Retrying in ${retryAfter}ms...`);
-        await new Promise(resolve => setTimeout(resolve, retryAfter));
+        await new Promise((resolve) => setTimeout(resolve, retryAfter));
         continue;
       }
 
@@ -73,7 +72,7 @@ const fetchWithRetry = async (
 
       // Exponential backoff
       const delay = baseDelay * Math.pow(2, attempt);
-      await new Promise(resolve => setTimeout(resolve, delay));
+      await new Promise((resolve) => setTimeout(resolve, delay));
     }
   }
   throw new Error("Max retries reached");
@@ -85,14 +84,22 @@ type ChatMessage = {
   type?: PromptType;
 };
 
-type ChatWrapperProps = {
+// Add skipAutoPrompt to your props interface
+interface ChatWrapperProps {
   sessionId: string;
-  initialUrl: string;
-  initialPrompt?: string;
+  initialUrl?: string;
+  initialPrompt?: string | null;
   initialHistory?: string[];
-};
+  skipAutoPrompt?: boolean;
+}
 
-const ChatWrapper = ({ sessionId, initialUrl, initialPrompt, initialHistory }: ChatWrapperProps) => {
+const ChatWrapper = ({
+  sessionId,
+  initialUrl,
+  initialPrompt,
+  initialHistory,
+  skipAutoPrompt = false,
+}: ChatWrapperProps) => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -106,7 +113,7 @@ const ChatWrapper = ({ sessionId, initialUrl, initialPrompt, initialHistory }: C
   const [apiError, setApiError] = useState<string | null>(null);
   const [lastRequestTime, setLastRequestTime] = useState(0);
   const REQUEST_INTERVAL = 1000; // 1 second between requests
-  
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const cache = useRef(new Map<string, ChatMessage>());
@@ -120,24 +127,24 @@ const ChatWrapper = ({ sessionId, initialUrl, initialPrompt, initialHistory }: C
     console.log("Terminal ready:", terminalReady);
     console.log("Show welcome:", showWelcome);
   }, [terminalReady, showWelcome]);
-  
+
   // For testing purposes
   useEffect(() => {
     const quickDebugTimer = setTimeout(() => {
       setShowWelcome(false);
       setTerminalReady(true);
     }, 5000);
-    
+
     return () => clearTimeout(quickDebugTimer);
   }, []);
-  
+
   // Show welcome screen then start boot sequence
   useEffect(() => {
     const welcomeTimer = setTimeout(() => {
       setShowWelcome(false);
       startBootSequence();
     }, 10000);
-    
+
     return () => clearTimeout(welcomeTimer);
   }, []);
 
@@ -145,31 +152,35 @@ const ChatWrapper = ({ sessionId, initialUrl, initialPrompt, initialHistory }: C
     const timer1 = setTimeout(() => {
       setMessages([{ role: "system", content: "Initializing AI Terminal..." }]);
     }, 300);
-    
+
     const timer2 = setTimeout(() => {
-      setMessages(prev => [...prev, { role: "system", content: "Loading neural networks..." }]);
+      setMessages((prev) => [...prev, { role: "system", content: "Loading neural networks..." }]);
     }, 800);
-    
+
     const timer3 = setTimeout(() => {
-      setMessages(prev => [...prev, { role: "system", content: "Establishing secure connection..." }]);
+      setMessages((prev) => [...prev, { role: "system", content: "Establishing secure connection..." }]);
     }, 1200);
-    
+
     const timer4 = setTimeout(() => {
-      setMessages(prev => [...prev, { role: "system", content: "System ready." }]);
+      setMessages((prev) => [...prev, { role: "system", content: "System ready." }]);
       setTerminalReady(true);
     }, 1600);
-    
+
     const timer5 = setTimeout(() => {
       if (initialPrompt) {
-        setMessages(prev => [...prev, { role: "assistant", content: initialPrompt }]);
+        setMessages((prev) => [...prev, { role: "assistant", content: initialPrompt }]);
       } else {
-        setMessages(prev => [...prev, { 
-          role: "assistant", 
-          content: "Welcome to AI Terminal. How can I assist you today? You can use regular text, URLs, or commands starting with /." 
-        }]);
+        setMessages((prev) => [
+          ...prev,
+          {
+            role: "assistant",
+            content:
+              "Welcome to AI Terminal. How can I assist you today? You can use regular text, URLs, or commands starting with /.",
+          },
+        ]);
       }
     }, 2000);
-    
+
     return () => {
       clearTimeout(timer1);
       clearTimeout(timer2);
@@ -181,42 +192,63 @@ const ChatWrapper = ({ sessionId, initialUrl, initialPrompt, initialHistory }: C
 
   // Handle initial URL analysis
   useEffect(() => {
-    // If we have an initialUrl prop, set up an automatic summarization request
-    if (initialUrl) {
-      // Wait for component to fully initialize
+    // Show welcome message when opened from extension with skipAutoPrompt
+    if (initialUrl && skipAutoPrompt) {
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: "system",
+          content: `Welcome to AI Chat! This chat is connected to: ${initialUrl}`,
+          type: PromptType.TEXT,
+        },
+      ]);
+
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: "assistant",
+          content: `Hi there! I'm ready to help you analyze content from ${initialUrl}. What would you like to know about this page?`,
+          type: PromptType.TEXT,
+        },
+      ]);
+    } else if (initialUrl && initialPrompt && !skipAutoPrompt) {
+      // If we have an initialUrl prop and are not skipping auto-prompt
       setTimeout(() => {
-        // Add a system message explaining we're summarizing a URL
-        setMessages(prev => [...prev, { 
-          role: "system", 
-          content: `Processing URL: ${initialUrl}`,
-          type: PromptType.TEXT
-        }]);
-        
-        // Trigger an automatic summarization prompt if no initialPrompt is specified
-        if (!initialPrompt) {
-          const summaryPrompt = `Please summarize the content from this URL: ${initialUrl}`;
-          // Add the user message
-          setMessages(prev => [...prev, { 
-            role: "user", 
-            content: summaryPrompt,
-            type: PromptType.TEXT 
-          }]);
-          
-          // Process the summarization request
-          handlePromptSubmission(summaryPrompt);
-        } else {
-          // If initialPrompt exists, use it instead
-          setMessages(prev => [...prev, { 
-            role: "user", 
+        // Add a system message explaining we're working with a URL
+        setMessages((prev) => [
+          ...prev,
+          {
+            role: "system",
+            content: `Processing URL: ${initialUrl}`,
+            type: PromptType.TEXT,
+          },
+        ]);
+
+        // Add the user message
+        setMessages((prev) => [
+          ...prev,
+          {
+            role: "user",
             content: initialPrompt,
-            type: PromptType.TEXT 
-          }]);
-          
-          handlePromptSubmission(initialPrompt);
-        }
+            type: PromptType.TEXT,
+          },
+        ]);
+
+        // Process the prompt
+        handlePromptSubmission(initialPrompt);
       }, 500);
+    } else if (initialUrl && !skipAutoPrompt) {
+      // If we have a URL but no prompt, just add a system message about the URL
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: "system",
+          content: `URL context: ${initialUrl}`,
+          type: PromptType.TEXT,
+        },
+      ]);
     }
-  }, [initialUrl]);
+  }, [initialUrl, initialPrompt, skipAutoPrompt]);
 
   // Auto-scroll to bottom when messages change
   useEffect(() => {
@@ -237,15 +269,14 @@ const ChatWrapper = ({ sessionId, initialUrl, initialPrompt, initialHistory }: C
 
   // Handle keyboard shortcuts for command history
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'ArrowUp') {
+    if (e.key === "ArrowUp") {
       e.preventDefault();
       if (historyIndex < promptHistory.length - 1) {
         const newIndex = historyIndex + 1;
         setHistoryIndex(newIndex);
         setInput(promptHistory[promptHistory.length - 1 - newIndex]);
       }
-    }
-    else if (e.key === 'ArrowDown') {
+    } else if (e.key === "ArrowDown") {
       e.preventDefault();
       if (historyIndex > 0) {
         const newIndex = historyIndex - 1;
@@ -253,16 +284,15 @@ const ChatWrapper = ({ sessionId, initialUrl, initialPrompt, initialHistory }: C
         setInput(promptHistory[promptHistory.length - 1 - newIndex]);
       } else if (historyIndex === 0) {
         setHistoryIndex(-1);
-        setInput('');
+        setInput("");
       }
-    }
-    else if (e.key === 'Tab') {
+    } else if (e.key === "Tab") {
       e.preventDefault();
-      if (input.startsWith('/')) {
-        const commands = ['/help', '/clear', '/image', '/url', '/code', '/weather'];
-        const matching = commands.find(cmd => cmd.startsWith(input));
+      if (input.startsWith("/")) {
+        const commands = ["/help", "/clear", "/image", "/url", "/code", "/weather"];
+        const matching = commands.find((cmd) => cmd.startsWith(input));
         if (matching) {
-          setInput(matching + ' ');
+          setInput(matching + " ");
         }
       }
     }
@@ -270,12 +300,12 @@ const ChatWrapper = ({ sessionId, initialUrl, initialPrompt, initialHistory }: C
 
   // Process special commands
   const processCommand = (command: string): { content: string; endConversation: boolean } => {
-    const cmd = command.split(' ')[0].toLowerCase();
+    const cmd = command.split(" ")[0].toLowerCase();
     const args = command.slice(cmd.length).trim();
-    
+
     switch (cmd) {
-      case 'help':
-        return { 
+      case "help":
+        return {
           content: `
 Available commands:
 /help - Show this help message
@@ -284,16 +314,16 @@ Available commands:
 /url [url] - Analyze a webpage
 /code [language] - Get code snippet in specified language
 /weather [location] - Get current weather
-          `, 
-          endConversation: false 
+          `,
+          endConversation: false,
         };
-      case 'clear':
+      case "clear":
         setMessages([{ role: "system", content: "Conversation cleared." }]);
         return { content: "Conversation history cleared.", endConversation: true };
       default:
-        return { 
-          content: `Unknown command: /${cmd}. Type /help to see available commands.`, 
-          endConversation: false 
+        return {
+          content: `Unknown command: /${cmd}. Type /help to see available commands.`,
+          endConversation: false,
         };
     }
   };
@@ -309,9 +339,9 @@ Available commands:
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ 
+        body: JSON.stringify({
           userPrompt,
-          url: initialUrl // Include the initialUrl if available
+          url: initialUrl, // Include the initialUrl if available
         }),
       });
 
@@ -327,10 +357,10 @@ Available commands:
         type: PromptType.TEXT,
       };
 
-      setMessages(prev => [...prev, assistantMessage]);
+      setMessages((prev) => [...prev, assistantMessage]);
     } catch (error) {
       console.error("Error fetching response:", error);
-      setMessages(prev => [
+      setMessages((prev) => [
         ...prev,
         { role: "assistant", content: "Error: Unable to process your request. Please try again later." },
       ]);
@@ -343,14 +373,14 @@ Available commands:
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!input.trim()) return;
-    
+
     const userPrompt = input;
     setInput("");
-    
+
     // Add user message to state with its type
     const { type } = detectPromptType(userPrompt);
-    setMessages(prev => [...prev, { role: "user", content: userPrompt, type }]);
-    
+    setMessages((prev) => [...prev, { role: "user", content: userPrompt, type }]);
+
     await handlePromptSubmission(userPrompt);
   };
 
@@ -364,9 +394,9 @@ Available commands:
         </div>
       );
     }
-    
+
     return (
-      <div 
+      <div
         className={`inline-block px-4 py-3 rounded-lg ${
           message.role === "user"
             ? "bg-indigo-600/80 text-white border border-indigo-500/80 shadow-md shadow-indigo-600/20"
@@ -381,7 +411,7 @@ Available commands:
         )}
         <div className="text-sm leading-relaxed">{message.content}</div>
         <div className={`text-xs text-${message.role === "user" ? "indigo-200/50" : "gray-500"} mt-1 text-right`}>
-          {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+          {new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
         </div>
       </div>
     );
@@ -389,7 +419,7 @@ Available commands:
 
   if (showWelcome) {
     return (
-      <motion.div 
+      <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ duration: 1.0 }}
@@ -441,14 +471,16 @@ Available commands:
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: index * 0.1, duration: 0.3 }}
                 className={`${
-                  message.role === "system" 
+                  message.role === "system"
                     ? "text-gray-500 text-xs"
                     : message.role === "user"
-                      ? "text-right"
-                      : "text-left"
+                    ? "text-right"
+                    : "text-left"
                 }`}
               >
-                {message.role !== "system" ? renderMessage(message, index) : (
+                {message.role !== "system" ? (
+                  renderMessage(message, index)
+                ) : (
                   <div className="flex items-center">
                     <span className="text-gray-500 mr-2">$</span>
                     <span>{message.content}</span>
@@ -456,13 +488,9 @@ Available commands:
                 )}
               </motion.div>
             ))}
-            
+
             {isTyping && (
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                className="text-left"
-              >
+              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-left">
                 <div className="inline-block px-4 py-2 rounded-lg bg-gray-800/70 text-gray-100 border border-gray-700/50">
                   <div className="mb-1 text-xs text-indigo-400 flex items-center">
                     <span className="mr-1 h-2 w-2 rounded-full bg-indigo-500 inline-block animate-pulse"></span> AI
@@ -480,9 +508,7 @@ Available commands:
 
       {/* Error Display */}
       {apiError && (
-        <div className="px-4 py-2 bg-red-900/50 text-red-200 text-sm">
-          Error: {apiError}
-        </div>
+        <div className="px-4 py-2 bg-red-900/50 text-red-200 text-sm">Error: {apiError}</div>
       )}
 
       {/* Usage Warning */}
@@ -493,26 +519,28 @@ Available commands:
       )}
 
       {/* Command Suggestion Chips */}
-      {terminalReady && input.startsWith('/') && (
+      {terminalReady && input.startsWith("/") && (
         <div className="flex flex-wrap gap-2 px-4 py-2 bg-black/90 border-t border-gray-800/30">
-          {['/help', '/clear', '/image', '/url', '/code', '/weather']
-            .filter(cmd => cmd.startsWith(input))
+          {["/help", "/clear", "/image", "/url", "/code", "/weather"]
+            .filter((cmd) => cmd.startsWith(input))
             .map((cmd, i) => (
               <button
                 key={i}
-                onClick={() => setInput(cmd + ' ')}
+                onClick={() => setInput(cmd + " ")}
                 className="px-2 py-1 text-xs bg-gray-800 text-gray-300 rounded border border-gray-700/50 hover:bg-gray-700 transition-colors"
               >
                 {cmd}
               </button>
-            ))
-          }
+            ))}
         </div>
       )}
 
       {/* Terminal Input */}
       <div className="border-t border-gray-800/50 bg-black/90 backdrop-blur-md p-4 shadow-lg shadow-indigo-900/5">
-        <form onSubmit={handleSubmit} className="flex items-center space-x-3 bg-gray-950 rounded-lg border border-gray-800/50 px-4 py-2">
+        <form
+          onSubmit={handleSubmit}
+          className="flex items-center space-x-3 bg-gray-950 rounded-lg border border-gray-800/50 px-4 py-2"
+        >
           <div className="font-mono text-indigo-400 text-sm">~/</div>
           <input
             ref={inputRef}
@@ -524,8 +552,8 @@ Available commands:
             disabled={isLoading}
             autoComplete="off"
           />
-          <button 
-            type="submit" 
+          <button
+            type="submit"
             disabled={isLoading || !input.trim()}
             className="rounded-md px-4 py-1.5 bg-indigo-600/80 hover:bg-indigo-700 text-white transition-all disabled:opacity-50 text-sm border border-indigo-500/50 flex items-center"
           >

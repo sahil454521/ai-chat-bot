@@ -14,7 +14,7 @@ export default function Home() {
     setIsLoading(true);
     // Navigate to the [...url] route which contains your ChatWrapper
     setTimeout(() => {
-      router.push("/chat"); // Change this to the correct path
+      router.push("./chat/page.tsx"); // Change this to the correct path
     }, 500);
   };
 
