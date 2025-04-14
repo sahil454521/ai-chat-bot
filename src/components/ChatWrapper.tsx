@@ -84,13 +84,14 @@ type ChatMessage = {
   type?: PromptType;
 };
 
-// Add skipAutoPrompt to your props interface
+// Update the props interface
 interface ChatWrapperProps {
   sessionId: string;
   initialUrl?: string;
   initialPrompt?: string | null;
   initialHistory?: string[];
   skipAutoPrompt?: boolean;
+  urlContent?: string | null; // Add this property
 }
 
 const ChatWrapper = ({
@@ -99,6 +100,7 @@ const ChatWrapper = ({
   initialPrompt,
   initialHistory,
   skipAutoPrompt = false,
+  urlContent = null, // Add this parameter
 }: ChatWrapperProps) => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
@@ -328,7 +330,7 @@ Available commands:
     }
   };
 
-  // Handle prompt submission with rate limiting
+  // Modify handlePromptSubmission to include URL content
   const handlePromptSubmission = async (userPrompt: string) => {
     setIsLoading(true);
     setIsTyping(true);
@@ -341,7 +343,8 @@ Available commands:
         },
         body: JSON.stringify({
           userPrompt,
-          url: initialUrl, // Include the initialUrl if available
+          url: initialUrl,
+          urlContent: urlContent, // Add this field
         }),
       });
 

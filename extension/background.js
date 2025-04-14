@@ -9,20 +9,9 @@ chrome.runtime.onInstalled.addListener(() => {
 // Handle toolbar icon click
 chrome.action.onClicked.addListener((tab) => {
   const currentUrl = encodeURIComponent(tab.url);
-  const fullUrl = `https://${APP_DOMAIN}/${currentUrl}`;
-  
-  try {
-    // Method 1
-    chrome.tabs.create({ url: fullUrl });
-    
-    // Fallback method (after a short delay)
-    setTimeout(() => {
-      // Method 2
-      window.open(fullUrl, '_blank');
-    }, 500);
-  } catch (e) {
-    console.error("Error opening URL:", e);
-  }
+  chrome.tabs.create({ 
+    url: `https://${APP_DOMAIN}/${currentUrl}?noAutoAnalyze=true`
+  });
 });
 
 // Handle messages from content script

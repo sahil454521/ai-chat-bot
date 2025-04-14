@@ -1,6 +1,9 @@
 import { notFound } from "next/navigation";
 import ChatWrapper from "@/components/ChatWrapper";
 
+// Add these imports
+import { extractTextFromUrl } from "@/utils/extraction"; // You'll create this
+
 type Props = {
   params: Promise<{
     url: string[]; // Always an array for catch-all routes
@@ -9,6 +12,7 @@ type Props = {
     prompt?: string;
     text?: string;
     history?: string | string[];
+    noAutoAnalyze?: string;
     [key: string]: string | string[] | undefined;
   }>;
 };
@@ -70,6 +74,16 @@ export default async function URLPage({ params, searchParams }: Props) {
       return notFound();
     }
 
+    // Check if this is a chat route
+    if (resolvedParams.url[0] === "chat") {
+      return (
+        <ChatWrapper 
+          sessionId={crypto.randomUUID()}
+          skipAutoPrompt={true}
+        />
+      );
+    }
+
     // Special handling for extension requests
     let urlPath = reconstructUrl(resolvedParams.url);
 
@@ -83,6 +97,20 @@ export default async function URLPage({ params, searchParams }: Props) {
     }
 
     const validUrl = validateAndNormalizeUrl(urlPath);
+    
+    // Check if we should skip auto-analysis
+    const skipAutoAnalysis = resolvedSearchParams?.noAutoAnalyze === "true";
+
+    // Try to fetch content from the URL for better context
+    let urlContent = null;
+    try {
+      // This will be used to provide better context to the AI
+      urlContent = await extractTextFromUrl(validUrl);
+      console.log(`Successfully extracted ${urlContent.length} characters from ${validUrl}`);
+    } catch (error) {
+      console.error(`Failed to extract content from ${validUrl}:`, error);
+      // We'll continue even if extraction fails
+    }
 
     // Process search params
     const prompt = resolvedSearchParams?.text 
@@ -99,8 +127,10 @@ export default async function URLPage({ params, searchParams }: Props) {
       <ChatWrapper 
         sessionId={crypto.randomUUID()} // Generate a unique session ID
         initialUrl={validUrl}
-        initialPrompt={prompt}
+        initialPrompt={skipAutoAnalysis ? null : prompt}
         initialHistory={history}
+        skipAutoPrompt={skipAutoAnalysis}
+        urlContent={urlContent} // Pass the extracted content
       />
     );
 

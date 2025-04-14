@@ -12,28 +12,41 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    const { userPrompt, url } = req.body;
+    const { userPrompt, url, urlContent } = req.body;
 
     if (!userPrompt) {
       return res.status(400).json({ error: "Missing userPrompt in request body" });
     }
 
-    // If a URL is provided, modify the prompt to include it
-    const finalPrompt = url 
-      ? `Context URL: ${url}\n\nUser query: ${userPrompt}` 
-      : userPrompt;
+    // If URL content was provided, include it in the prompt
+    let finalPrompt = userPrompt;
+    let systemPrompt = "You are a helpful AI assistant.";
+
+    if (url && urlContent) {
+      // We have both URL and content, create a better context
+      systemPrompt = `You are analyzing content from the URL: ${url}. 
+Below is the content extracted from this URL. When answering questions,
+use this content as context and provide accurate information based on it.`;
+      
+      finalPrompt = `URL Content:\n${urlContent}\n\nUser Query: ${userPrompt}`;
+    } 
+    else if (url) {
+      // We have only URL but no content
+      systemPrompt = `You are analyzing content from the URL: ${url}.
+Provide helpful, accurate information about this content.`;
+      
+      finalPrompt = `Context URL: ${url}\n\nUser query: ${userPrompt}`;
+    }
 
     // Log the prompt for debugging
-    console.log("Processing prompt:", finalPrompt);
+    console.log("Processing prompt:", finalPrompt.substring(0, 200) + "...");
 
     const chatCompletion = await client.chat.completions.create({
       model: "deepseek-ai/DeepSeek-V3-0324-fast",
       messages: [
         {
           role: "system",
-          content: url 
-            ? `You are analyzing content from the URL: ${url}. Provide helpful, accurate information about this content.`
-            : "You are a helpful AI assistant.",
+          content: systemPrompt,
         },
         {
           role: "user",
